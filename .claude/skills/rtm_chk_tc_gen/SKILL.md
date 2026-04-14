@@ -21,13 +21,13 @@ allowed-tools:Read,Edit,Grep,python
 -FL-TP页中Testpoint对应的checker和Testcae编号分别对应于Checker List、DV Testcase List中检查、测试相应测试点的条目
 
 4.检查新的RTM excel文件
--格式和源RTM一致
 -生成的Checker和Testcase符合填写要求
 -检查所有的TP都有Checker List、DV Testcase List中的Checker和Testcase覆盖
+-检查新RTM中包含源文件中DR-FL、FL-TP、填写要求、说明信息
+-格式和源RTM一致，包括各个sheet内容的字体、填充颜色、表格边框
 
 ##注意事项
 -不要修改源文件
--生成的RTM excel格式和源RTM一致
 
 ##附件资源
 最终RTM excel文件填写内容和格式可参考examples文件夹下的RTM excel文件
