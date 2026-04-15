@@ -102,45 +102,30 @@ CHK_002: lane_mode_checker
 
 **示例Testcase格式**（基于LRS中的实际定义）：
 ```
-TC_001: test_csr_write_via_1bit_mode
-配置条件：
-1. test_mode_i=1（测试模式使能）
-2. CTRL.EN=1（模块使能）
-3. CTRL.LANE_MODE=00（1-bit模式）
-
-输入激励：
-1. pcs_n_i拉低，开始帧传输
-2. 通过pdi_i[0]按MSB-first顺序发送：opcode=0x10(WR_CSR)，目标寄存器地址，写数据
-3. 等待1个turnaround周期
-4. pcs_n_i拉高结束请求
-
-期望结果：
-1. pdo_oe_o在响应阶段变为1
-2. 通过pdo_o[0]接收STATUS=0x00（成功）
-3. 目标寄存器被正确写入配置值
-
-coverage check点：
-直接用例覆盖，不收功能覆盖率。
-
-TC_002: test_ahb_read_4bit_mode
+test_memory_map
 配置条件：
 1. test_mode_i=1
-2. CTRL.EN=1
-3. CTRL.LANE_MODE=01（4-bit模式）
+2. 通过WR_CSR(opcode=0x10, addr=0x04, wdata=0x00000001)设置CTRL.EN=1
 
 输入激励：
-1. pcs_n_i拉低
-2. 通过pdi_i[3:0]发送opcode=0x21(AHB_RD32)
-3. 发送32-bit对齐的AHB目标地址
-4. 等待响应
+1. 通过WR_CSR(opcode=0x10, addr=0x00, wdata=0xFFFFFFFF)尝试写VERSION寄存器，验证只读属性
+2. 通过RD_CSR(opcode=0x11, addr=0x00)读取VERSION寄存器
+3. 通过WR_CSR(opcode=0x10, addr=0x04, wdata=0x00000003)写CTRL寄存器
+4. 通过RD_CSR(opcode=0x11, addr=0x04)读取CTRL寄存器
+5. 发送AHB_WR32命令(opcode=0x20, addr=0x00001000, wdata=0x12345678)访问SoC内部memory-mapped地址
+6. 发送AHB_RD32命令(opcode=0x21, addr=0x00001000)读回验证
+7. 监控AHB地址空间范围：haddr_o输出32-bit地址
 
 期望结果：
-1. htrans_o=NONSEQ，hwrite_o=0（AHB读操作）
-2. STATUS=0x00 + RDATA[31:0]返回
-3. pdo_o[3:0]按高nibble优先顺序输出数据
+1. CSR通过WR_CSR/RD_CSR协议命令正确访问
+2. VERSION寄存器只读，写入后读回原值
+3. CTRL寄存器读写正确
+4. AHB_WR32/AHB_RD32正确访问SoC memory-mapped地址，haddr_o=0x00001000
+5. 模块自身CSR(addr=0x00/0x04/0x08/0x0C)不进入SoC AHB memory map
+6. AHB Master访问采用32-bit地址空间，word访问粒度
 
 coverage check点：
-对AHB地址范围、LANE_MODE配置值收集功能覆盖率。
+对CSR地址(0x00~0x0C)和AHB地址空间收集功能覆盖率
 ```
 
 ### 步骤5: 更新FL-TP链接
@@ -173,6 +158,7 @@ coverage check点：
 
 - 不要修改源文件
 - skill执行中不要修改skill文件夹里的内容
+- skill执行结束，删除临时文件
 - Checker编号和Testcase编号需与TP编号对应
 - 多个TP可共享同一个Checker或Testcase
 - 保留源RTM中的填写要求和说明信息
