@@ -1,6 +1,6 @@
 ---
 name:RTM_TP2TC_skills
-description:依据LRS文件和RTM文件中的DR-FL、FL-TP，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。
+description:依据LRS文件和RTM文件中的DR-FL、FL-TP，按照RTM模板的格式，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。
 allowed-tools:Read,Edit,Grep,Bash(python3:*)
 ---
 
@@ -12,63 +12,42 @@ allowed-tools:Read,Edit,Grep,Bash(python3:*)
 
 首先使用提供的脚本读取文件结构：
 
-```bash
-# 读取RTM文件结构
-python3 scripts/rtm_utils.py read RTM_AI.xlsx
+1. **从模板文件提取信息**
+   - 读取模板文件信息，理清组织结构
+   - **DR-FL**: 硬件功能点列表，包含DR编号、Feature类别、FL编号、Feature描述
+   - **FL-TP**: 测试点列表，每个功能点对应一个或多个测试点(TP)
+   - **Checker List**: 验证检查点，用于判断测试点的功能正确性
+      checker核心职责：检查结果，判断对错
+      checker工作性质：被动的、监控型的。它观察设计的“反应”。
+      checker关注焦点：“做得对不对”。设计的行为、时序、数据、协议是否符合规范。
+   - **DV Testcase List**: 具体测试用例，需涵盖所有测试点
+      testcase核心职责：生成激励，创造测试场景。
+      testcase工作性质：主动的、驱动型的。它向设计施加“刺激”。
+      testcase关注焦点：“做什么测试”。覆盖哪些功能点、场景、边界条件或协议要求。
 
-# 读取LRS文档结构
-python3 scripts/lrs_reader.py read TBUS_LRS_v1.1.docx
-```
+2. **解析模板文件**
+   - 严格理解模板的结构布局信息 
+   - 严格分析模板的合并与拆分结构
+   - 严格理解模板的字体样式，包括字体类型/大小/颜色
+   - 严格阅读并理解模板中**填写说明**
+   - 严格理解填写说明对于行列表头的解释
 
-理解以下关键信息：
-- **DR-FL**: 硬件功能点列表，包含DR编号、Feature类别、FL编号、Feature描述
-- **FL-TP**: 测试点列表，每个功能点对应一个或多个测试点(TP)
-- **Checker List**: 验证检查点，用于判断测试点的功能正确性
-   checker核心职责：检查结果，判断对错
-   checker工作性质：被动的、监控型的。它观察设计的“反应”。
-   checker关注焦点：“做得对不对”。设计的行为、时序、数据、协议是否符合规范。
-- **DV Testcase List**: 具体测试用例，需涵盖所有测试点
-   testcase核心职责：生成激励，创造测试场景。
-   testcase工作性质：主动的、驱动型的。它向设计施加“刺激”。
-   testcase关注焦点：“做什么测试”。覆盖哪些功能点、场景、边界条件或协议要求。
+3. **解析填写规则**
+   - 保留**填写说明**信息，不要删除
+   - 理解**填写说明**的要求
+   - 明确填写的格式要求
+   - 进一步理解填写示例格式与填写说明
+   - 是否必填
 
 ### 步骤1.5: 提取关键设计信息
 
 **重要**：在生成Checker和Testcase之前，必须先从LRS文档提取关键设计信息，确保生成的描述引用具体名称。
 
-```bash
-# 提取关键设计信息（汇总）
-python3 scripts/lrs_reader.py key_info TBUS_LRS_v1.1.docx
-
-# 或分别提取各项信息：
-python3 scripts/lrs_reader.py opcodes TBUS_LRS_v1.1.docx      # 提取opcode定义
-python3 scripts/lrs_reader.py registers TBUS_LRS_v1.1.docx    # 提取寄存器定义
-python3 scripts/lrs_reader.py timing TBUS_LRS_v1.1.docx      # 提取时序要求
-```
-
-**必须提取并记录以下信息**：
-
-1. **接口信号列表**：信号名、方向、位宽
-   - 示例：`pcs_n_i`(片选), `pdi_i[3:0]`(输入数据), `pdo_o[3:0]`(输出数据), `pdo_oe_o`(输出使能), `test_mode_i`(测试模式)
-
-2. **Opcode定义**：操作码值、名称、功能
-   - 示例：`0x10`(WR_CSR), `0x11`(RD_CSR), `0x20`(AHB_WR32), `0x21`(AHB_RD32)
-
-3. **寄存器定义**：寄存器名、字段
-   - 示例：`CTRL.EN`, `CTRL.LANE_MODE`, `CTRL.SOFT_RST`
-
-4. **时序要求**：turnaround周期、建立/保持时间
-   - 示例：turnaround 1 cycle
-
 **所有后续生成的Checker和Testcase必须引用这些提取的具体名称，不得使用模糊描述。**
 
 ### 步骤2: 生成新的RTM文件
 
-新的RTM文件需保留源RTM的所有内容（DR-FL、FL-TP、填写要求等）。
-   - 保留**填写说明**信息，不要删除
-   - 理解**填写说明**的要求
-   - 明确填写的格式要求
-   - 进一步理解填写示例格式与填写说明
+新的RTM文件需保留源RTM的必要内容（DR-FL、FL-TP、填写要求等）。
 
 ### 步骤3: 填写Checker List
 
@@ -113,7 +92,7 @@ dma_1x_req会变为低电平，撤销接收请求;
    - 格式统一、排版清晰
    - 严格遵循填写说明的要求
    - 保持与模板完全一致的栏目顺序
-   - 原模板放不下的内容，适当增加行列，格式要一致
+   - 原模板放不下的内容，适当增加行列，格式要一致,**线框、字体格式都与源模板一致**
 
 ### 步骤4: 填写DV Testcase List
 
@@ -188,7 +167,7 @@ coverage check点：
    - 格式统一、排版清晰
    - 严格遵循填写说明的要求
    - 保持与模板完全一致的栏目顺序
-   - 原模板放不下的内容，适当增加行列，格式要一致
+   - 原模板放不下的内容，适当增加行列，格式要一致，**线框、字体格式都与源模板一致**
 
 ### 步骤5: 更新FL-TP链接
 
@@ -211,6 +190,8 @@ coverage check点：
 - 不要修改源文件
 - 多个TP可共享同一个Checker或Testcase，也可多个Checker或Testcase覆盖同一个TP
 - **关键**：所有描述必须引用LRS中定义的具体信号名、寄存器名、opcode值，不得使用模糊描述
+- **关键**：按照原模板的格式填写内容，线框、字体格式都与源模板一致
+- 源模板的内容和结构都完好
 - 不要随意改变表格的框线类型
 - 不要随意合并与拆分单元格
 
