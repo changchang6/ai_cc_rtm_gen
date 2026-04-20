@@ -2,6 +2,7 @@
 """
 TBUS (APLC-Lite) RTM Generator
 Generates Checker List and DV Testcase List based on LRS specification.
+Properly preserves template formatting, borders, and merged cells.
 """
 
 import openpyxl
@@ -11,7 +12,7 @@ from copy import copy
 import os
 
 # =============================================================================
-# Checker Definitions
+# Checker Definitions - Based on LRS TBUS specification
 # =============================================================================
 CHECKERS = {
     "CHK_001": {
@@ -575,15 +576,22 @@ coverage check点：
     }
 }
 
-def copy_cell_style(src_cell, dst_cell):
-    """Copy style from source cell to destination cell."""
-    if src_cell.has_style:
-        dst_cell.font = copy(src_cell.font)
-        dst_cell.border = copy(src_cell.border)
-        dst_cell.fill = copy(src_cell.fill)
-        dst_cell.number_format = copy(src_cell.number_format)
-        dst_cell.protection = copy(src_cell.protection)
-        dst_cell.alignment = copy(src_cell.alignment)
+
+def get_thin_border():
+    """Return standard thin border style."""
+    thin_side = Side(style='thin')
+    return Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+
+def apply_cell_style(cell, font_name='宋体', font_size=11, bold=False,
+                     h_align='center', v_align='center', wrap_text=False,
+                     border_style='thin'):
+    """Apply standard cell style."""
+    cell.font = Font(name=font_name, size=font_size, bold=bold)
+    cell.alignment = Alignment(horizontal=h_align, vertical=v_align, wrap_text=wrap_text)
+    if border_style == 'thin':
+        cell.border = get_thin_border()
+
 
 def generate_rtm(template_path, output_path):
     """Generate RTM file with checkers and testcases."""
@@ -593,165 +601,189 @@ def generate_rtm(template_path, output_path):
     # =========================================================================
     # Process Checker List sheet
     # =========================================================================
-    ws_checker = wb['Checker List']
+    print("\nProcessing 'Checker List' sheet...")
+    ws = wb['Checker List']
 
-    # Template structure:
-    # Row 1: Title (merged A1:D1)
-    # Row 2: Headers
-    # Row 3-15: Data rows (CHK_001, CHK_002 filled, rest empty)
+    # Template structure (original):
+    # Row 1: Title "Checker List" (merged A1:D1)
+    # Row 2: Headers (CHK编号, CHK Name, CHK描述, 备注)
+    # Rows 3-15: Data rows (some filled, some empty)
     # Row 16: "填写要求" (merged A16:D16)
-    # Row 17-20: Notes (merged cells)
+    # Rows 17-20: Notes (merged cells)
 
-    # We need 16 checkers (rows 3-18), then notes start at row 19
+    # We need: 16 checkers (rows 3-18), then notes (rows 19-23)
 
-    # Step 1: Unmerge all cells in Checker List
-    merged_ranges_to_restore = []
-    for merged_range in list(ws_checker.merged_cells.ranges):
-        # Store the range info for later restoration
-        merged_ranges_to_restore.append(str(merged_range))
-        ws_checker.unmerge_cells(str(merged_range))
-    print(f"  Unmerged cells: {merged_ranges_to_restore}")
-
-    # Step 2: Insert additional rows before row 16 (original notes position)
-    # We need 16 data rows (3-18), originally had 13 (3-15)
-    # Need to insert 3 rows before the notes section
-    rows_to_insert = 3
-    ws_checker.insert_rows(16, rows_to_insert)
-    print(f"  Inserted {rows_to_insert} rows before row 16")
-
-    # Step 3: Clear and fill Checker data (rows 3-18)
-    for row in range(3, 19):
+    # Save original notes content
+    notes_content = []
+    for row in range(16, 21):
+        row_data = []
         for col in range(1, 5):
-            ws_checker.cell(row=row, column=col, value=None)
+            cell = ws.cell(row=row, column=col)
+            row_data.append({
+                'value': cell.value,
+                'font': copy(cell.font),
+                'border': copy(cell.border),
+                'alignment': copy(cell.alignment)
+            })
+        notes_content.append(row_data)
 
-    # Fill Checkers
-    checker_start_row = 3
-    for i, (chk_id, chk_data) in enumerate(CHECKERS.items()):
-        row = checker_start_row + i
-        ws_checker.cell(row=row, column=1, value=chk_id)
-        ws_checker.cell(row=row, column=2, value=chk_data['name'])
-        ws_checker.cell(row=row, column=3, value=chk_data['description'])
-        ws_checker.cell(row=row, column=4, value=None)
+    # Unmerge all merged cells in Checker List
+    merged_ranges = list(ws.merged_cells.ranges)
+    for merged_range in merged_ranges:
+        ws.unmerge_cells(str(merged_range))
+    print(f"  Unmerged {len(merged_ranges)} merged cell ranges")
+
+    # Clear all existing data rows (rows 3 onwards)
+    for row in range(3, ws.max_row + 1):
+        for col in range(1, 5):
+            ws.cell(row=row, column=col).value = None
+
+    # Fill 16 checkers (rows 3-18)
+    checker_row = 3
+    for chk_id, chk_data in CHECKERS.items():
+        # CHK编号
+        cell = ws.cell(row=checker_row, column=1, value=chk_id)
+        apply_cell_style(cell, h_align='center')
+
+        # CHK Name
+        cell = ws.cell(row=checker_row, column=2, value=chk_data['name'])
+        apply_cell_style(cell, h_align='center')
+
+        # CHK描述
+        cell = ws.cell(row=checker_row, column=3, value=chk_data['description'])
+        apply_cell_style(cell, h_align=None, v_align='center', wrap_text=True)
+
+        # 备注
+        cell = ws.cell(row=checker_row, column=4, value=None)
+        apply_cell_style(cell)
+
         print(f"  Added {chk_id}: {chk_data['name']}")
+        checker_row += 1
 
-    # Step 4: Restore notes content at new position (rows 19-23)
-    notes_data = [
-        ("填写要求", None, None, None, True),  # Row 19, merge A19:D19
-        ("CHK Name", "如果是SVA checker，需填写SVA property名字", None, None, True),  # Row 20, merge B20:D20
-        ("CHK描述", "1、需要定性+定量描述，需具体到check的信号、取值 \n2、和DV SPEC中Checker方案描述的区别 — RTM中描述check的内容，DV SPEC中描述checker的实现方案(例如是通过SVA实现还是scoreboard实时数据比对，还是文件对比)", None, None, True),  # Row 21, merge B21:D21
-        (None, None, None, None, False),  # Row 22
-        (None, None, None, None, False),  # Row 23
-    ]
+    # Add notes section starting at row 19
+    notes_start_row = 19
+    for i, row_data in enumerate(notes_content):
+        row = notes_start_row + i
+        for col, cell_data in enumerate(row_data, 1):
+            cell = ws.cell(row=row, column=col)
+            cell.value = cell_data['value']
+            cell.font = cell_data['font']
+            cell.border = cell_data['border']
+            cell.alignment = cell_data['alignment']
 
-    for i, (col_a, col_b, col_c, col_d, should_merge) in enumerate(notes_data):
-        row = 19 + i
-        ws_checker.cell(row=row, column=1, value=col_a)
-        ws_checker.cell(row=row, column=2, value=col_b)
-        ws_checker.cell(row=row, column=3, value=col_c)
-        ws_checker.cell(row=row, column=4, value=col_d)
-
-    # Step 5: Re-merge cells
-    # Title row: A1:D1
-    ws_checker.merge_cells('A1:D1')
+    # Re-merge cells
+    # Title: A1:D1
+    ws.merge_cells('A1:D1')
     # Notes section
-    ws_checker.merge_cells('A19:D19')  # "填写要求"
-    ws_checker.merge_cells('B20:D20')  # CHK Name description
-    ws_checker.merge_cells('B21:D21')  # CHK description
-    print("  Restored merged cells")
+    ws.merge_cells(f'A{notes_start_row}:D{notes_start_row}')  # "填写要求"
+    ws.merge_cells(f'B{notes_start_row+1}:D{notes_start_row+1}')  # CHK Name note
+    ws.merge_cells(f'B{notes_start_row+2}:D{notes_start_row+2}')  # CHK描述 note
+    print(f"  Notes section at rows {notes_start_row}-{notes_start_row+2}")
 
     # =========================================================================
     # Process DV Testcase List sheet
     # =========================================================================
+    print("\nProcessing 'DV Testcase List' sheet...")
     ws_tc = wb['DV Testcase List']
 
     # Template structure:
-    # Row 1: Title (merged A1:D1)
-    # Row 2: Headers
-    # Row 3-6: TC_001-TC_004 (example entries)
-    # Row 7+: Empty rows
+    # Row 1: Title "Test Case List" (merged A1:D1)
+    # Row 2: Headers (TC编号, TC Name, TC 描述, 备注)
+    # Rows 3+: Data rows
 
-    # Step 1: Unmerge title
+    # Unmerge title
     for merged_range in list(ws_tc.merged_cells.ranges):
         ws_tc.unmerge_cells(str(merged_range))
 
-    # Step 2: Clear rows 3 onwards
+    # Clear existing data rows
     for row in range(3, ws_tc.max_row + 1):
         for col in range(1, 5):
-            ws_tc.cell(row=row, column=col, value=None)
+            ws_tc.cell(row=row, column=col).value = None
 
-    # Step 3: Fill Testcases
-    tc_start_row = 3
-    for i, (tc_id, tc_data) in enumerate(TESTCASES.items()):
-        row = tc_start_row + i
-        ws_tc.cell(row=row, column=1, value=tc_id)
-        ws_tc.cell(row=row, column=2, value=tc_data['name'])
-        ws_tc.cell(row=row, column=3, value=tc_data['description'])
-        ws_tc.cell(row=row, column=4, value=None)
+    # Fill 16 testcases
+    tc_row = 3
+    for tc_id, tc_data in TESTCASES.items():
+        # TC编号
+        cell = ws_tc.cell(row=tc_row, column=1, value=tc_id)
+        apply_cell_style(cell, h_align='center', font_size=8)
+
+        # TC Name
+        cell = ws_tc.cell(row=tc_row, column=2, value=tc_data['name'])
+        apply_cell_style(cell, h_align='center', font_size=8)
+
+        # TC描述
+        cell = ws_tc.cell(row=tc_row, column=3, value=tc_data['description'])
+        apply_cell_style(cell, h_align=None, v_align='center', wrap_text=True, font_size=8)
+
+        # 备注
+        cell = ws_tc.cell(row=tc_row, column=4, value=None)
+        apply_cell_style(cell, font_size=8)
+
         print(f"  Added {tc_id}: {tc_data['name']}")
+        tc_row += 1
 
-    # Step 4: Re-merge title
+    # Re-merge title
     ws_tc.merge_cells('A1:D1')
 
-    # Update FL-TP sheet with checker and testcase links
+    # =========================================================================
+    # Update FL-TP sheet links
+    # =========================================================================
+    print("\nUpdating 'FL-TP' sheet links...")
     ws_fltp = wb['FL-TP']
 
-    # FL-TP has 16 TPs (rows 3-18), with columns:
-    # A: FL_ID, B: TP类别, C: TP编号, D: TP描述, E: checker编号, F: Testcase编号
-
-    # The links are already in the template, but let's verify and update
-    tp_to_checker = {
-        "TP_001": "CHK_001",
-        "TP_002": "CHK_002",
-        "TP_003": "CHK_003",
-        "TP_004": "CHK_004",
-        "TP_005": "CHK_005",
-        "TP_006": "CHK_006",
-        "TP_007": "CHK_007",
-        "TP_008": "CHK_008",
-        "TP_009": "CHK_009",
-        "TP_010": "CHK_010",
-        "TP_011": "CHK_011",
-        "TP_012": "CHK_012",
-        "TP_013": "CHK_013",
-        "TP_014": "CHK_014",
-        "TP_015": "CHK_015",
-        "TP_016": "CHK_016",
+    # TP to Checker/Testcase mapping
+    tp_mapping = {
+        "TP_001": ("CHK_001", "DV_TC_001"),
+        "TP_002": ("CHK_002", "DV_TC_002"),
+        "TP_003": ("CHK_003", "DV_TC_003"),
+        "TP_004": ("CHK_004", "DV_TC_004"),
+        "TP_005": ("CHK_005", "DV_TC_005"),
+        "TP_006": ("CHK_006", "DV_TC_006"),
+        "TP_007": ("CHK_007", "DV_TC_007"),
+        "TP_008": ("CHK_008", "DV_TC_008"),
+        "TP_009": ("CHK_009", "DV_TC_009"),
+        "TP_010": ("CHK_010", "DV_TC_010"),
+        "TP_011": ("CHK_011", "DV_TC_011"),
+        "TP_012": ("CHK_012", "DV_TC_012"),
+        "TP_013": ("CHK_013", "DV_TC_013"),
+        "TP_014": ("CHK_014", "DV_TC_014"),
+        "TP_015": ("CHK_015", "DV_TC_015"),
+        "TP_016": ("CHK_016", "DV_TC_016"),
     }
 
-    tp_to_tc = {
-        "TP_001": "DV_TC_001",
-        "TP_002": "DV_TC_002",
-        "TP_003": "DV_TC_003",
-        "TP_004": "DV_TC_004",
-        "TP_005": "DV_TC_005",
-        "TP_006": "DV_TC_006",
-        "TP_007": "DV_TC_007",
-        "TP_008": "DV_TC_008",
-        "TP_009": "DV_TC_009",
-        "TP_010": "DV_TC_010",
-        "TP_011": "DV_TC_011",
-        "TP_012": "DV_TC_012",
-        "TP_013": "DV_TC_013",
-        "TP_014": "DV_TC_014",
-        "TP_015": "DV_TC_015",
-        "TP_016": "DV_TC_016",
-    }
-
-    # Update FL-TP links (already correct in template, but verify)
+    # Update links for rows 3-18 (16 TPs)
     for row in range(3, 19):
         tp_id = ws_fltp.cell(row=row, column=3).value
-        if tp_id and tp_id in tp_to_checker:
-            ws_fltp.cell(row=row, column=5, value=tp_to_checker[tp_id])
-            ws_fltp.cell(row=row, column=6, value=tp_to_tc[tp_id])
-            print(f"  Linked {tp_id} -> {tp_to_checker[tp_id]}, {tp_to_tc[tp_id]}")
+        if tp_id and tp_id in tp_mapping:
+            checker_id, tc_id = tp_mapping[tp_id]
+            ws_fltp.cell(row=row, column=5, value=checker_id)
+            ws_fltp.cell(row=row, column=6, value=tc_id)
+            print(f"  Linked {tp_id} -> {checker_id}, {tc_id}")
 
+    # =========================================================================
+    # Fix DR-FL sheet borders (Gotcha: A/D/E columns)
+    # =========================================================================
+    print("\nFixing 'DR-FL' sheet borders...")
+    ws_drfl = wb['DR-FL']
+
+    # Apply thin borders to columns A, D, E for data rows (3-18)
+    for row in range(3, 19):
+        for col in [1, 4, 5]:  # A, D, E columns
+            cell = ws_drfl.cell(row=row, column=col)
+            if cell.border.left.style != 'thin' or cell.border.right.style != 'thin':
+                cell.border = get_thin_border()
+    print("  Fixed borders for columns A, D, E")
+
+    # =========================================================================
     # Save the workbook
+    # =========================================================================
     print(f"\nSaving to: {output_path}")
     wb.save(output_path)
     wb.close()
     print("Done!")
 
     return output_path
+
 
 if __name__ == '__main__':
     template_path = "RTM_AI探索_R3(1).xlsx"
