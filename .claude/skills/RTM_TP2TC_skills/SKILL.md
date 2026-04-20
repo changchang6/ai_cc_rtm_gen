@@ -1,7 +1,7 @@
 ---
-name:RTM_TP2TC_skills
-description:依据LRS文件和RTM文件中的DR-FL、FL-TP，按照RTM模板的格式，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。
-allowed-tools:Read,Edit,Grep,Bash(python3:*)
+name: RTM_TP2TC_skills
+description: 依据LRS文件和RTM模板文件，填写RTM中的Checker List和DV Testcase List，生成完整的RTM文件。
+allowed-tools: Read,Edit,Grep,Bash(python3:*)
 ---
 
 你是一名资深芯片验证工程师，依据工作目录下的RTM excel文件和LRS word文件，生成新的RTM excel文件。
@@ -10,204 +10,68 @@ allowed-tools:Read,Edit,Grep,Bash(python3:*)
 
 ### 步骤1: 理解输入文件
 
-首先使用提供的脚本读取文件结构：
+首先使用提供的脚本读取文件内容和格式：
 
 1. **从模板文件提取信息**
    - 读取模板文件信息，理清组织结构
    - **DR-FL**: 硬件功能点列表，包含DR编号、Feature类别、FL编号、Feature描述
    - **FL-TP**: 测试点列表，每个功能点对应一个或多个测试点(TP)
    - **Checker List**: 验证检查点，用于判断测试点的功能正确性
-      checker核心职责：检查结果，判断对错
-      checker工作性质：被动的、监控型的。它观察设计的“反应”。
-      checker关注焦点：“做得对不对”。设计的行为、时序、数据、协议是否符合规范。
    - **DV Testcase List**: 具体测试用例，需涵盖所有测试点
-      testcase核心职责：生成激励，创造测试场景。
-      testcase工作性质：主动的、驱动型的。它向设计施加“刺激”。
-      testcase关注焦点：“做什么测试”。覆盖哪些功能点、场景、边界条件或协议要求。
 
-2. **解析模板文件**
+2. **解析模板格式**
    - 严格理解模板的结构布局信息 
-   - 严格分析模板的合并与拆分结构
+   - 严格理解模板的合并与拆分结构
    - 严格理解模板的字体样式，包括字体类型/大小/颜色
-   - 严格阅读并理解模板中**填写说明**
-   - 严格理解填写说明对于行列表头的解释
 
 3. **解析填写规则**
-   - 保留**填写说明**信息，不要删除
-   - 理解**填写说明**的要求
-   - 明确填写的格式要求
-   - 进一步理解填写示例格式与填写说明
-   - 是否必填
+   - 理解模板中**填写说明**，是否必填
+
+4. **按规则填入模板**
+   - 严格遵循填写说明的要求
+   - 保持与模板完全一致的格式
+   - **模板表格放不下的内容，适当增加行列，线框、字体等格式都与模板一致**
 
 ### 步骤1.5: 提取关键设计信息
 
-**重要**：在生成Checker和Testcase之前，必须先从LRS文档提取关键设计信息，确保生成的描述引用具体名称。
-
+**重要**：在生成Checker和Testcase之前，必须先从LRS文档提取关键设计信息（寄存器、接口、操作码等），确保生成的描述引用具体名称。
 **所有后续生成的Checker和Testcase必须引用这些提取的具体名称，不得使用模糊描述。**
 
 ### 步骤2: 生成新的RTM文件
 
-新的RTM文件需保留源RTM的必要内容（DR-FL、FL-TP、填写要求等）。
+新的RTM文件需保留模板RTM的必要内容（DR-FL、FL-TP、填写要求等）
+- Checker和Testcase sheet中插入足够的行，用于内容填写，确保填写的内容不超出表格边界覆盖填写说明等内容
 
 ### 步骤3: 填写Checker List
 
-根据LRS文档中的功能描述，生成涵盖所有TP检查的Checker：
-
-**Checker描述要求**：
-1. 需要定性+定量描述，必须引用LRS中的具体信号名、取值
-2. 包含具体的检查内容（寄存器、信号、时序、状态机跳转等）和预期值
-3. **被动的、监控型的**。不要写成testcase，即checker描述中不包含具体的测试步骤，如九步法检测寄存器：包含默认值、读写属性、异常地址读写检查，这种写法属于testcase
-4. 可通过代码实现。checker的内容在测试环境中可以使用代码实现。
-
-**Checker描述必须包含**：
-- 具体信号名（从LRS interface_signals提取）
-- 具体取值范围或条件
-- 具体时序要求（从LRS提取）
-
-**示例Checker格式**（基于LRS中的实际信号）：
-```
-clk_freq_checker
-描述：
-1.检查频率值是否正确：连续采集时钟上升沿和下降沿并计算实际频率/周期，判断是否处于目标频率的允许误差范围内（±1%）；
-2.检查时钟稳定性：通过连续采样周期，对比相邻两个周期的频率偏差是否在3%内。
-
-dvfs_checker
-描述：
-检查电压和频率调整的顺序：降频时应先降频率再降电压；升频时应先升电压再升频率；（存在只升降频率不调电压的场景，不要误检测）
-
-DMA_checker
-描述：
-对于DMA功能，检查能否正常触发DMA请求，以及能否进行DMA数据搬运，包括:
-1、DMA发送数据请求：验证在THR或TX_FIFO中数据量为空或小于等于阈值时，dma_tx_req会变为高电平，当THR或TX_FIFO中数据量不为空或大于阈值时,
-dma_tx_req会变为低电平，撤销发送请求;
-2、DMA发送数据搬运：配置DMA_SAR、DMA_DAR、DMA_CTRL、DMA_CFG以及DMA_CHEN，验证当dma_tx_req拉高时，DMA将数据写入THR或
-TX_FIFO，写入的数据通过sout发送出去，DMA写入的数据与sout发送的数据一致;
-3、DMA接收数据请求：验证在RBR或RX_FIFO中数据量不为空或大于等于阈值时，dma_1x_req会变为高电平，当RBR或RX_FIFO中数据量为空或小于阈值时,
-dma_1x_req会变为低电平，撤销接收请求;
-4、DMA接收数据搬运：配置DMA_SAR、DMA_DAR、DMA_CTRL、DMA_CFG以及DMA_CHEN，验证当dma_1x_req拉高时，DMA从RBR或RX_FIFO读出数
-据，DMA读出的数据与sin接收的数据一致;
-```
-
- **按规则填入模板**
-   - 格式统一、排版清晰
-   - 严格遵循填写说明的要求
-   - 保持与模板完全一致的栏目顺序
-   - 原模板放不下的内容，适当增加行列，格式要一致,**线框、字体格式都与源模板一致**
+生成覆盖所有TP的Checker
 
 ### 步骤4: 填写DV Testcase List
 
-生成涵盖所有测试点的Testcase：
-
-**TC描述必须引用LRS中的具体名称**：
-
-1. **配置条件**: 使用LRS中的具体寄存器名（CTRL.EN, CTRL.LANE_MODE等）
-2. **输入激励**: 使用LRS中的具体接口名（pdi_i, pcs_n_i）和opcode值（0x10, 0x11等）
-3. **期望结果**: 使用LRS中的具体状态码和信号名（STATUS=0x00表示成功）
-4. **执行顺序**: 明确每一步的操作，按顺序列出。
-5. 如果一个testcase中测试多个功能点不好衔接或显得混乱，建议拆分成多个testcase，每个testcase只测一个功能点
-6. 除了定向测试，可以增加random testcase，保证验证的完备性
-
-**示例Testcase格式**（基于LRS中的实际定义）：
-```
-配置条件：
-//对配置寄存器或接口控制信号进行描述
-输入激励：
-//对接口激励进行描述
-期望结果：
-// 描述逻辑处理期望的结果，以及check点
-coverage check点：
-//如果通过随机测试，功能模型建模来确认对测试点的覆盖，需要描述功能模型的功能。如果通过直接用例来覆盖测试点，则不需要收集功能覆盖率，该部分内容不用描述。
-
-peri_uart_autoflow_test
-配置条件：
-1.URAT模块解复位初始化接收通路;
-2.配置DLF[3:0]设置波特率小数部分，配置DLH和DLL设置波特率整数部分;
-3.配置FCR[0]=1使能FIFO;
-4.随机设置FCR[5:4]设置TX_FIFO水线;
-5.随机配置FCR[7:6]设置RX_FIFO水线;
-6.随机配置IER[7]设置THRE使能
-7.随机配置LCR[1:0]设置数据位宽(5-8bit);
-8.随机配置LCR[2]设置停止位位宽(1/1.5/2bit停止位);
-9.随机配置LCR[5:3]设置奇/偶校验;
-10.配置MCR[1]=1和MCR[5]=1使能autoflow模式;
-输入激励:
-1.将随机数据通过sin从UART_VIP中传输到UART中;
-2.将随机数据通过sout从UART传输到UART_VIP中，在传输过程中将cts_n端force为高电平;
-期望结果:
-1.将随机数据通过sin从UART_VIP中传输到UART中，UART不读取，当RX_FIFO中数据量大于等于阈值时，rts_n输出高电平到UART_VIP的cts_n端,
-UART_VIP会停止发送串行数据，通过读RBR清空RX_FIFO，rts_n输出低电平到UART_VIP的cts_n端，通知UART_VIP继续发送串行数据;
-2.将随机数据通过sout从UART传输到UART_VIP中，在传输过程中将cts_n端force为高电平，TX_FIFO仍可以写入，但不会通过sout进行传输，当cts_n输
-入再次变为低电平时，传输恢复;
-coverage check点 :
-直接用例覆盖，不收功能覆盖率
-
-xxx_test
-配置条件：
-1.RSIO模块解复位初始化接收通路；
-2.仅配置lane0，其它lane无效：1）解复位并使能接受通道lane0，并配置lane0数据通路正确接收数据；2）复位并不使能lane0通路；3）再解复位使能lane0，并配置lane0数据通路正确接收数据；
-3.仅配置lane1，其它lane无效：配置过程同上lane0
-4.仅配置lane2，其它lane无效：配置过程同上lane0
-5.仅配置lane3，其它lane无效：配置过程同上lane0
-其它：以上测试过程中，不关心的配置或接口控制信号随机
-输入激励：
-1.对应lane0通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-2.对应lane1通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-3.对应lane2通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-4.对应lane3通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-期望结果：
-1.lane0使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-2.lane1使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-3.lane2使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-4.lane3使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-coverage check点：
-直接用例覆盖，不收功能覆盖率
-```
-
- **按规则填入模板**
-   - 格式统一、排版清晰
-   - 严格遵循填写说明的要求
-   - 保持与模板完全一致的栏目顺序
-   - 原模板放不下的内容，适当增加行列，格式要一致，**线框、字体格式都与源模板一致**
+生成覆盖所有TP的Testcase
 
 ### 步骤5: 更新FL-TP链接
 
 将生成的Checker和Testcase编号填写到FL-TP sheet对应的TP条目后：
-- checker编号
-- Testcase编号
+- 多个TP可共享同一个Checker或Testcase，也可多个Checker或Testcase覆盖同一个TP
 
 ### 步骤6: 验证输出
 
 检查生成的RTM文件：
+- 新的RTM格式与模板RTM一致，**checker list中填写说明表格完好保留**
 - 所有TP都有对应的Checker和Testcase覆盖
 - **Checker描述引用LRS中的具体信号名和取值**
 - TC描述包含配置条件、输入激励、期望结果、coverage check点
 - **TC描述使用具体接口名、寄存器名、opcode值**
-- 新的RTM文件中源RTM的所有内容（DR-FL、FL-TP、填写要求等）没有丢失
-- 新的RTM文件格式与源RTM一致
 
 ## 注意事项
 
 - 不要修改源文件
-- 多个TP可共享同一个Checker或Testcase，也可多个Checker或Testcase覆盖同一个TP
-- **关键**：所有描述必须引用LRS中定义的具体信号名、寄存器名、opcode值，不得使用模糊描述
-- **关键**：按照原模板的格式填写内容，线框、字体格式都与源模板一致
-- 源模板的内容和结构都完好
-- 不要随意改变表格的框线类型
-- 不要随意合并与拆分单元格
 
 ## 附件资源
 
 - `scripts/rtm_utils.py`: RTM文件读写工具
 - `scripts/lrs_reader.py`: LRS文档解析工具（支持提取opcodes、registers、timing等）
 - `examples/`: 参考示例文件
-
-## 常见Checker检查内容
-
-| 类别 | 检查内容示例 |
-|------|-------------|
-| 时钟 | clk_i频率稳定性、时钟域同步 |
-| 复位 | rst_ni异步复位、状态机IDLE、寄存器默认值 |
-| 寄存器 | CTRL/STATUS读写正确性、字段配置生效 |
-| 接口 | pcs_n_i帧边界、pdi_i/pdo_o时序、pdo_oe_o方向控制 |
-| 协议 | opcode解析、帧格式、turnaround周期 |
-| 异常 | FRAME_ERR、BAD_OPCODE、TIMEOUT检测 |
+- `reference/checker_ref.md`: checker填写参考
+- `reference/testcase_ref.md`: testcase填写参考
