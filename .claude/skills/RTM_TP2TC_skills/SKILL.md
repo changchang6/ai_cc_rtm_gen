@@ -1,10 +1,10 @@
 ---
 name: RTM_TP2TC_gen
-description: 依据LRS文件和RTM文件中的DR-FL、FL-TP，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。
+description: 依据LRS文件和RTM文件中的DR-FL、FL-TP，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。确保在以下场景触发：用户提到RTM、验证测试用例、checker、testcase、芯片验证、DV验证、覆盖率、功能覆盖率、随机测试、Burst测试、错误注入测试、cross-coverage等任何验证相关话题时。
 allowed-tools: Read,Edit,Grep,Bash(python3:*)
 ---
 
-你是一名资深芯片验证工程师，依据工作目录下的RTM excel文件和LRS word文件，生成新的RTM excel文件。
+你是一名资深芯片验证工程师，依据工作目录下的RTM excel文件和LRS文档（支持.docx和.md格式），生成新的RTM excel文件。
 
 ## 工作流程
 
@@ -16,21 +16,23 @@ allowed-tools: Read,Edit,Grep,Bash(python3:*)
 # 读取RTM文件结构
 python3 scripts/rtm_utils.py read RTM_AI.xlsx
 
-# 读取LRS文档结构
+# 读取LRS文档结构（Word格式）
 python3 scripts/lrs_reader.py read TBUS_LRS_v1.1.docx
 ```
+
+**注意**：如果LRS文件为Markdown格式（.md），直接使用Read工具读取文件内容并解析关键信息。
 
 理解以下关键信息：
 - **DR-FL**: 硬件功能点列表，包含DR编号、Feature类别、FL编号、Feature描述
 - **FL-TP**: 测试点列表，每个功能点对应一个或多个测试点(TP)
 - **Checker List**: 验证检查点，用于判断测试点的功能正确性
    checker核心职责：检查结果，判断对错
-   checker工作性质：被动的、监控型的。它观察设计的“反应”。
-   checker关注焦点：“做得对不对”。设计的行为、时序、数据、协议是否符合规范。
+   checker工作性质：被动的、监控型的。它观察设计的”反应”。
+   checker关注焦点：”做得对不对”。设计的行为、时序、数据、协议是否符合规范。
 - **DV Testcase List**: 具体测试用例，需涵盖所有测试点
    testcase核心职责：生成激励，创造测试场景。
-   testcase工作性质：主动的、驱动型的。它向设计施加“刺激”。
-   testcase关注焦点：“做什么测试”。覆盖哪些功能点、场景、边界条件或协议要求。
+   testcase工作性质：主动的、驱动型的。它向设计施加”刺激”。
+   testcase关注焦点：”做什么测试”。覆盖哪些功能点、场景、边界条件或协议要求。
 
 ### 步骤1.5: 提取关键设计信息
 
@@ -108,7 +110,7 @@ clk_freq_checker
 
 ### 步骤4: 填写DV Testcase List
 
-生成测试用例
+生成测试用例，包括**基础测试用例**和**随机测试用例**。
 
 **TC完备性**：
 
@@ -117,6 +119,7 @@ clk_freq_checker
 3. **TC可以使代码覆盖率和功能覆盖率达到100%** 
    - 所有寄存器的所有位至少有1个测试用例覆盖到
    - 所有状态机的所有状态和状态跳转至少有1个测试用例覆盖到
+4. **随机测试用例数量**：每个TP应生成多个testcase（通常3-10个），包括正常场景、边界场景、错误场景、随机组合场景
 
 **TC描述必须引用LRS中的具体名称**：
 
@@ -125,6 +128,192 @@ clk_freq_checker
    - **输入激励可执行性**：不要使用不具体的描述：如触发各类错误条件(非法opcode、帧错误、AHB错误等)，未指明如何触发。发送命令验证优先级，未指明发送什么命令。使用明确可执行的描述，如发送非法opcode(0x00/0xFF)验证BAD_OPCODE(0x01)。
    - **输入激励的执行顺序**: 明确每一步的操作，按顺序可以正常衔接，如test_error_handling，构造一种错误场景后无法立刻测试另一种错误，需要先复位和进行一些初始化配置。如果一个testcase中测试多个功能点不好衔接或显得混乱，可以多写一些testcase，每个testcase只测一个功能点。
 3. **期望结果**: 使用LRS中的具体状态码和信号名（STATUS=0x00表示成功）
+
+#### 4.1 随机测试用例类型
+
+**必须生成以下类型的随机测试用例**：
+
+| 类型 | 描述 | 示例 |
+|------|------|------|
+| 配置随机化 | 遍历所有有效配置组合 | lane_mode(1/4/8/16-bit) × opcode(6种) × burst_len(1/4/8/16) |
+| 数据随机化 | 随机数据payload、随机地址 | 随机wdata/rdata，随机对齐地址 |
+| 错误注入 | 随机注入各类错误 | hresp_i=1, timeout, frame_abort, 非法opcode |
+| 交叉覆盖 | 多维度组合测试 | 所有lane_mode × 所有opcode × 成功/失败场景 |
+| 边界测试 | 边界值和极限场景 | 最大burst_len, FIFO满/空, 地址边界 |
+
+#### 4.2 随机测试用例命名规范
+
+```
+DV_TC_XXX_RAND_YYY
+   XXX = TP编号（001-999）  
+   YYY = 随机测试序号（001-999）
+```
+
+示例：
+- `DV_TC_008_RAND_001`: opcode译码的配置随机化测试
+- `DV_TC_016_RAND_001`: AHB协议的交叉覆盖测试
+
+#### 4.3 随机测试用例模板
+
+**配置随机化测试模板**：
+```
+配置条件：
+1. 模块复位完成
+2. test_mode_i=1，en_i=1
+3. 随机配置lane_mode_i[1:0]（遍历2'b00/01/10/11）
+4. 随机配置其他不关心信号
+
+输入激励：
+1. 随机选择opcode（遍历0x10/0x11/0x20/0x21/0x22/0x23）
+2. 对于Burst命令，随机选择burst_len（遍历1/4/8/16）
+3. 随机生成地址（addr需4-byte对齐）
+4. 对于写命令，随机生成wdata
+5. 重复执行N次（N≥100），每次随机配置
+
+期望结果：
+1. 成功场景：status_code=STS_OK(0x00)
+2. 失败场景：返回对应错误码
+3. 所有配置组合均被覆盖
+
+coverage check点：
+1. 覆盖lane_mode所有取值：2'b00, 2'b01, 2'b10, 2'b11
+2. 覆盖所有opcode：0x10, 0x11, 0x20, 0x21, 0x22, 0x23
+3. 覆盖所有burst_len：1, 4, 8, 16
+4. 覆盖lane_mode × opcode所有组合
+```
+
+**错误注入测试模板**：
+```
+配置条件：
+1. 模块复位完成
+2. test_mode_i=1，en_i=1
+3. 随机选择测试场景
+
+输入激励：
+1. 随机选择错误类型并注入：
+   - 非法opcode(随机选择0x00~0x0F或0x24~0xFF)
+   - 非法CSR地址(reg_addr随机>=0x40)
+   - 非对齐地址(addr随机设置addr[1:0]!=0)
+   - 非法burst_len(随机选择2,3,5,6,7,9~15)
+   - 跨1KB边界地址
+   - AHB错误响应(force hresp_i=1)
+   - AHB超时(force hready_i=0持续256+周期)
+2. 每种错误类型重复执行N次（N≥10）
+
+期望结果：
+1. 前置错误：返回对应错误码，不发起总线访问
+2. AHB错误：返回STS_AHB_ERR(0x40)
+3. Burst中途中止：已发射beat正常完成
+
+coverage check点：
+1. 覆盖所有状态码：0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x81
+2. 覆盖错误优先级链各组合
+3. 覆盖Burst中途错误中止场景
+```
+
+**交叉覆盖测试模板**：
+```
+配置条件：
+1. 模块复位完成
+2. 使用嵌套循环遍历所有组合
+
+输入激励：
+// 伪代码框架
+for lane_mode in [2'b00, 2'b01, 2'b10, 2'b11]:
+    for opcode in [0x10, 0x11, 0x20, 0x21, 0x22, 0x23]:
+        for burst_len in [1, 4, 8, 16]:  // 仅Burst命令
+            for success_or_error in [success, error]:
+                配置对应条件
+                发送命令
+                检查响应
+                
+期望结果：
+1. 成功路径：status=0x00
+2. 失败路径：返回正确错误码
+3. 所有组合均被验证
+
+coverage check点：
+1. lane_mode × opcode × (success|error) 交叉覆盖率100%
+2. burst_len × lane_mode 交叉覆盖率100%
+3. 所有FSM状态跳转至少被触发一次
+```
+
+#### 4.4 功能覆盖率模型
+
+**必须定义功能覆盖率**以指导随机测试：
+
+```
+covergroup rtm_functional_cg;
+    // Lane mode 覆盖
+    lane_mode_cp: coverpoint lane_mode_i {
+        bins lane_1bit  = {2'b00};
+        bins lane_4bit  = {2'b01};
+        bins lane_8bit  = {2'b10};
+        bins lane_16bit = {2'b11};
+    }
+    
+    // Opcode 覆盖
+    opcode_cp: coverpoint opcode_latched_q {
+        bins wr_csr    = {8'h10};
+        bins rd_csr    = {8'h11};
+        bins ahb_wr32  = {8'h20};
+        bins ahb_rd32  = {8'h21};
+        bins ahb_wr_burst = {8'h22};
+        bins ahb_rd_burst = {8'h23};
+        bins illegal   = default;
+    }
+    
+    // Burst length 覆盖
+    burst_len_cp: coverpoint burst_len_latched_q {
+        bins single = {1};
+        bins incr4  = {4};
+        bins incr8  = {8};
+        bins incr16 = {16};
+        bins illegal = default;
+    }
+    
+    // 状态码覆盖
+    status_cp: coverpoint status_code {
+        bins ok        = {8'h00};
+        bins frame_err = {8'h01};
+        bins bad_opcode = {8'h02};
+        bins not_in_test = {8'h04};
+        bins disabled   = {8'h08};
+        bins bad_reg    = {8'h10};
+        bins align_err  = {8'h20};
+        bins ahb_err    = {8'h40};
+        bins bad_burst  = {8'h80};
+        bins burst_bound = {8'h81};
+    }
+    
+    // 状态机覆盖
+    front_fsm_cp: coverpoint front_state_q {
+        bins states[] = {[0:5]}; // IDLE/ISSUE/WAIT_RESP/TA/TX/TX_BURST
+    }
+    
+    axi_fsm_cp: coverpoint axi_state_q {
+        bins states[] = {[0:5]}; // AXI_IDLE/REQ/BURST/WAIT/DONE/ERR
+    }
+    
+    // 交叉覆盖
+    lane_opcode_cross: cross lane_mode_cp, opcode_cp;
+    opcode_status_cross: cross opcode_cp, status_cp;
+endcovergroup
+```
+
+#### 4.5 testcase数量要求
+
+| TP类型 | 最少testcase数 | 推荐数量 ||--------|---------------|----------|
+| 时钟/复位 | 2-3 | 3-5 |
+| 寄存器访问 | 5-8 | 8-15 |
+| 工作模式 | 4-6 | 6-10 |
+| 数据接口 | 5-8 | 10-20（含随机） |
+| 协议/Opcode | 8-12 | 15-25（含交叉覆盖） |
+| 异常处理 | 10-15 | 20-30（含错误注入） |
+| 性能/DFX | 3-5 | 5-10 |
+| AHB协议 | 10-15 | 20-30（含随机） |
+
+**总体目标**：最终testcase数量应为TP数量的**3-5倍以上**
 
 **示例Testcase格式**（基于LRS中的实际定义）：
 
