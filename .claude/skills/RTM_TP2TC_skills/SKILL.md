@@ -238,9 +238,11 @@ coverage check点：
 3. 所有FSM状态跳转至少被触发一次
 ```
 
-#### 3.3 testcase要求
+#### 3.3 testcase描述核心要求
 
 **总体目标**：最终testcase数量应为TP数量的**2-3倍以上**
+
+**每条Testcase描述总字数不少于400字符**
 
 **TC完备性**：
 
@@ -251,65 +253,117 @@ coverage check点：
    - 所有状态机的所有状态和状态跳转至少有1个测试用例覆盖到
 4. **随机测试用例数量**：每个TP应生成多个testcase（通常2-5个），包括正常场景、边界场景、错误场景、随机组合场景
 
-**TC描述必须引用LRS中的具体名称**：
+**TC各部分详细要求**：
 
-1. **配置条件**: 使用LRS中的具体寄存器名（CTRL.EN, CTRL.LANE_MODE等）
-2. **输入激励**: 使用LRS中的具体接口名（pdi_i, pcs_n_i）和opcode值（0x10, 0x11等）
-   - **输入激励可执行性**：不要使用不具体的描述：如触发各类错误条件(非法opcode、帧错误、AHB错误等)，未指明如何触发。发送命令验证优先级，未指明发送什么命令。使用明确可执行的描述，如发送非法opcode(0x00/0xFF)验证BAD_OPCODE(0x01)。
-   - **输入激励的执行顺序**: 明确每一步的操作，按顺序可以正常衔接，如test_error_handling，构造一种错误场景后无法立刻测试另一种错误，需要先复位和进行一些初始化配置。如果一个testcase中测试多个功能点不好衔接或显得混乱，可以多写一些testcase，每个testcase只测一个功能点。
-3. **期望结果**: 使用LRS中的具体状态码和信号名（STATUS=0x00表示成功）
+**1. 配置条件要求**：
+- 每条TC的配置条件必须包含**2-5条**具体配置
+- 必须使用LRS中的具体寄存器名（如CTRL.EN、CTRL.LANE_MODE）
+- 必须包含具体信号取值（如test_mode_i=1，en_i=1，lane_mode_i=2'b01）
+- 格式：编号.具体配置；每条以分号结尾
 
-**示例Testcase格式**（基于LRS中的实际定义）：
+**2. 输入激励要求**：
+- 每条TC的输入激励必须包含**4-9步**操作
+- 每步必须包含：
+  - 具体opcode值（如opcode=0x10）
+  - 具体寄存器地址和名称（如reg_addr=0x04(CTRL)）
+  - 具体数据值（如wdata=0x00000001(CTRL.EN=1)）
+  - 具体接口信号操作（如通过pdi_i[3:0]按MSB-first顺序发送）
+- **输入激励可执行性**：不使用模糊描述。不写"触发各类错误条件"这种无法直接执行的描述，而要写"发送非法opcode(0x00/0xFF)验证BAD_OPCODE(0x02)"这种可直接执行的描述
+- **输入激励的执行顺序**：明确每一步的操作，按顺序可以正常衔接。如果构造一种错误场景后无法立刻测试另一种错误，需要先复位和进行初始化配置。如果一个testcase中测试多个功能点不好衔接，可拆分为多个testcase
+- 格式：编号.具体操作；每条以分号结尾
+
+**3. 期望结果要求**：
+- 期望结果必须包含**3-6条**具体检查
+- 每条必须包含：
+  - 具体信号名和取值（如pdo_oe_o=0，htrans_o=2'b00(IDLE)）
+  - 具体错误码和名称（如STS_BAD_REG(0x10)）
+  - 具体状态机状态（如front_state=IDLE）
+  - 具体寄存器值（如CTRL.EN=0，CTRL.LANE_MODE=2'b00）
+- 格式：编号.具体期望；每条以分号结尾
+
+**4. coverage check点要求**：
+- 随机测试：描述功能覆盖率模型和需覆盖的维度
+- 直接用例：写"直接用例覆盖，不收功能覆盖率"
+
+**高质量Testcase示例**（基于实际LRS文档）：
 
 ```
+test_reset_behavior
+描述：
 配置条件：
-//对配置寄存器或接口控制信号进行描述
+1.模块上电，clk_i稳定运行100MHz；
+2.初始配置test_mode_i=1，en_i=1，lane_mode_i=2'b01（4-bit模式）；
 输入激励：
-//对接口激励进行描述
+1.拉低rst_ni触发异步复位（至少持续2个clk_i周期）；
+2.释放rst_ni（同步释放）；
+3.复位释放后发送RD_CSR命令（opcode=0x11，reg_addr=0x08读取STATUS寄存器）验证模块恢复工作；
+4.再次拉低rst_ni触发复位，释放后检查复位状态；
 期望结果：
-// 描述逻辑处理期望的结果，以及check点
-coverage check点：
-//如果通过随机测试，功能模型建模来确认对测试点的覆盖，需要描述功能模型的功能。如果通过直接用例来覆盖测试点，则不需要收集功能覆盖率，该部分内容不用描述。
-
-test_xxx
-配置条件：
-1.RSIO模块解复位初始化接收通路；
-2.仅配置lane0，其它lane无效：1）解复位并使能接受通道lane0，并配置lane0数据通路正确接收数据；2）复位并不使能lane0通路；3）再解复位使能lane0，并配置lane0数据通路正确接收数据；
-3.仅配置lane1，其它lane无效：配置过程同上lane0
-4.仅配置lane2，其它lane无效：配置过程同上lane0
-5.仅配置lane3，其它lane无效：配置过程同上lane0
-其它：以上测试过程中，不关心的配置或接口控制信号随机
-输入激励：
-1.对应lane0通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-2.对应lane1通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-3.对应lane2通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-4.对应lane3通路，依次按照使能的情况，发送方依次输入激励数据包和参考时钟；
-期望结果：
-1.lane0使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-2.lane1使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-3.lane2使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
-4.lane3使能期间，能正确接受到发送方发来的数据，不使能期间无数据；其它lane通道无数据；
+1.复位后所有状态机回到IDLE态：front_state=IDLE，back_state=S_IDLE，axi_state=AXI_IDLE；
+2.输出信号deassert：pdo_oe_o=0，htrans_o=2'b00(IDLE)，csr_rd_en_o=0，csr_wr_en_o=0；
+3.pdo_o[15:0]=16'b0，协议上下文清空；
+4.RX/TX FIFO清空：rxfifo_empty_o=1，txfifo_empty_o=1；
+5.CTRL.EN=0，CTRL.LANE_MODE=2'b00(1-bit默认)；
+6.复位释放后RD_CSR命令正常响应status_code=STS_OK(0x00)；
 coverage check点：
 直接用例覆盖，不收功能覆盖率
 
+test_csr_access
+描述：
 配置条件：
-1.URAT模块解复位初始化接收通路;
-2.配置DLF[3:0]设置波特率小数部分，配置DLH和DLL设置波特率整数部分;
-3.配置FCR[0]=1使能FIFO;
-4.随机设置FCR[5:4]设置TX_FIFO水线;
-5.随机配置FCR[7:6]设置RX_FIFO水线;
-6.随机配置IER[7]设置THRE使能
-7.随机配置LCR[1:0]设置数据位宽(5-8bit);
-8.随机配置LCR[2]设置停止位位宽(1/1.5/2bit停止位);
-9.随机配置LCR[5:3]设置奇/偶校验;
-10.配置MCR[1]=1和MCR[5]=1使能autoflow模式;
+1.模块复位完成，test_mode_i=1，en_i=1；
+2.配置lane_mode_i=2'b01（4-bit模式）；
 输入激励：
-1.将随机数据通过sin从UART_VIP中传输到UART中;
-2.将随机数据通过sout从UART传输到UART_VIP中，在传输过程中将cts_n端force为高电平;
-期望结果:
-1.将随机数据通过sin从UART_VIP中传输到UART中，UART不读取，当RX_FIFO中数据量大于等于阈值时，rts_n输出高电平到UART_VIP的cts_n端，
-UART_VIP会停止发送串行数据，通过读RBR清空RX_FIFO，rts_n输出低电平到UART_VIP的cts_n端，通知UART_VIP继续发送串行数据;
-2.将随机数据通过sout从UART传输到UART_VIP中，在传输过程中将cts_n端force为高电平。TX_FIFO仍可以写入，但不会通过sout进行传输，当cts_n输入再次变为低电平时，传输恢复;
+1.发送WR_CSR命令：opcode=0x10，reg_addr=0x04(CTRL)，wdata=0x00000001（CTRL.EN=1）；
+2.发送RD_CSR命令：opcode=0x11，reg_addr=0x00(VERSION)，验证读返回；
+3.发送RD_CSR命令：opcode=0x11，reg_addr=0x04(CTRL)，验证读回wdata；
+4.发送RD_CSR命令：opcode=0x11，reg_addr=0x40（超出0x00~0x3F范围），验证地址越界拒绝；
+期望结果：
+1.WR_CSR：csr_wr_en_o脉冲持续1周期，同一周期采样csr_addr_o=0x04/csr_wdata_o=0x01，响应status_code=STS_OK(0x00)；
+2.RD_CSR(VERSION)：csr_rd_en_o脉冲后下一周期采样csr_rdata_i有效，响应status_code=STS_OK(0x00)+rdata；
+3.RD_CSR(CTRL)：读回wdata=0x00000001；
+4.地址越界：返回STS_BAD_REG(0x10)，不发起CSR访问（无csr_rd_en_o脉冲）；
+coverage check点：
+对CSR地址范围0x00~0x3F收集功能覆盖率
+
+test_mode_rejection
+描述：
+配置条件：
+1.模块复位完成，lane_mode_i=2'b01（4-bit模式）；
+输入激励：
+1.设置test_mode_i=0，en_i=1；
+2.发送RD_CSR命令：opcode=0x11，reg_addr=0x00；
+3.检查响应帧status_code；
+4.复位模块，设置test_mode_i=1，en_i=0；
+5.发送WR_CSR命令：opcode=0x10，reg_addr=0x04，wdata=0x01；
+6.检查响应帧status_code；
+7.复位模块，设置test_mode_i=0，en_i=0（同时不满足）；
+8.发送RD_CSR命令：opcode=0x11，reg_addr=0x00；
+9.检查响应帧status_code；
+期望结果：
+1.test_mode_i=0时：返回STS_NOT_IN_TEST(0x04)，不发起CSR/AHB访问；
+2.en_i=0时：返回STS_DISABLED(0x08)，不发起CSR/AHB访问；
+3.test_mode_i=0且en_i=0时：返回STS_NOT_IN_TEST(0x04)（优先级STS_NOT_IN_TEST(0x04) > STS_DISABLED(0x08)）；
+4.所有拒绝场景下csr_wr_en_o=0，csr_rd_en_o=0，htrans_o=IDLE；
+coverage check点：
+对test_mode_i和en_i的组合状态收集功能覆盖率
+
+test_frame_boundary
+描述：
+配置条件：
+1.模块复位完成，test_mode_i=1，en_i=1；
+2.配置lane_mode_i=2'b01（4-bit模式），pcs_n_i初始为高电平；
+输入激励：
+1.正常帧传输：ATE拉低pcs_n_i开始帧传输，按MSB-first顺序通过pdi_i[3:0]发送RD_CSR帧(opcode=0x11+reg_addr=0x00)；
+2.等待1个turnaround周期，检查pdo_oe_o拉高，模块驱动pdo_o[3:0]输出响应；
+3.帧中止场景1：发送WR_CSR命令(opcode=0x10+reg_addr=0x04+wdata=0x01)但在接收8bit后(已锁存opcode)提前拉高pcs_n_i；
+4.复位模块，帧中止场景2：发送RD_CSR命令但在接收4bit后(opcode未锁存，接收<8bit)提前拉高pcs_n_i；
+期望结果：
+1.正常帧：pcs_n_i=0期间接收数据，turnaround后pdo_oe_o=1驱动响应，status_code=STS_OK(0x00)；
+2.帧中止场景1(opcode已锁存)：返回STS_FRAME_ERR(0x01)，pdo_oe_o拉高后输出状态码；
+3.帧中止场景2(opcode未锁存)：接收状态静默复位，不产生frame_abort，不输出响应帧；
+coverage check点：
+对帧中止时机(opcode已锁存/未锁存)收集功能覆盖率
 ```
 
 ### 步骤4: 填写Checker List
@@ -318,36 +372,69 @@ UART_VIP会停止发送串行数据，通过读RBR清空RX_FIFO，rts_n输出低
 
 **生成的checker可以检查所有testcase的结果正确性**
 
-**适合用system verilog assertion进行检查的用SVA实现checker**
+Checker name：如果是SVA checker，需填写SVA property名字
 
-**Checker描述要求**：
-1. 需要定性+定量描述，必须引用LRS中的具体信号名、取值
-2. **必须包含具体的检查内容（寄存器、信号、时序、状态机跳转等）和预期值**
-3. 与DV SPEC的区别：RTM中描述check的内容，DV SPEC中描述实现方案
-4. **被动的、监控型的**。不要写成testcase，即checker描述中不包含具体的测试步骤，如九步法检测寄存器：包含默认值、读写属性、异常地址读写检查，这种写法属于testcase。
+**Checker描述核心要求**：
 
-**示例Checker格式**（基于LRS中的实际信号）：
+**每条Checker必须包含4-6条检查点，描述总字数不少于200字符**
+
+**每个检查点必须包含以下要素**：
+1. **具体信号名**（含完整位宽，如pdo_o[15:0]、htrans_o[1:0]）
+2. **具体取值**（如16'b0、STS_BAD_REG(0x10)、IDLE）
+3. **状态机状态列举**（如front_state=IDLE，back_state=S_IDLE，axi_state=AXI_IDLE）
+4. **寄存器名**（如CTRL.EN、CTRL.LANE_MODE、LAST_ERR）
+5. **协议参数**（如turnaround 1周期、hsize_o=3'b010）
+
+**Checker描述格式要求**：
+- 检查点格式：编号.具体描述；每条以分号结尾
+- 标题说明检查目的
+- 所有信号、寄存器、状态码名称必须来自LRS文档
+
+**Checker与DV SPEC的区别**：
+- RTM中描述**check的内容**（定性+定量）
+- DV SPEC中描述**checker的实现方案**（SVA/scoreboard/文件对比）
+
+**Checker性质定位**：
+- **被动的、监控型的**，用于观察设计行为是否正确
+- **不要写成testcase**，不包含测试步骤、激励注入、错误触发
+- 例如"九步法检测寄存器（默认值、读写属性、异常地址检查）"属于testcase，不是checker
+
+**高质量Checker示例**（基于实际LRS文档）：
+
 ```
-dvfs_checker
+reset_state_checker
 描述：
-检查电压和频率调整的顺序：降频时应先降频率再降电压；升频时应先升电压再升频率；（存在只升降频率不调电压的场景，不要误检测）
+检查rst_ni异步复位及同步释放后模块状态正确性：
+1.复位后所有状态机回到IDLE态：front_state=IDLE，back_state=S_IDLE，axi_state=AXI_IDLE；
+2.复位后所有输出deassert：pdo_oe_o=0，htrans_o=2'b00(IDLE)，csr_rd_en_o=0，csr_wr_en_o=0；
+3.pdo_o[15:0]=16'b0，协议上下文清空；
+4.RX/TX FIFO清空：rxfifo_empty_o=1，txfifo_empty_o=1；
+5.CTRL.EN=0，CTRL.LANE_MODE=2'b00(1-bit默认)，LAST_ERR=0x00。
 
-status_reg_checker
+csr_access_checker
 描述：
-在IP解复位后的每个cycle，对IP内部状态寄存器和建模得到的状态进行check：
-1、通道使能寄存器chenreg
-2、通道任务完成原始中断状态寄存器rawtfr_ch
-3、通道任务传输异常原始中断状态寄存器rawerr_ch
-4、通道安全访问异常原始中断状态寄存器rawnsec_ch
-5、通道访问异常中断状态寄存器rawacc_ch
-6、公共寄存器组的安全访问异常原始中断寄存器rawcnnsec
-7、公共寄存器组的访问异常原始中断寄存器rawcmacc
-8、通道任务完成mask后的中断状态寄存器statustfr
+检查CSR接口读写时序正确性：
+1.CSR写操作：csr_wr_en_o为单周期脉冲，同一周期内csr_addr_o和csr_wdata_o有效，外部CSR File在该上升沿采样完成写入；
+2.CSR读操作：csr_rd_en_o为单周期脉冲，外部CSR File在下一周期将读数据稳定在csr_rdata_i[31:0]，模块在该周期采样（1 cycle读延迟）；
+3.CSR有效地址范围0x00~0x3F，reg_addr>=0x40的访问在前置检查阶段即被拒绝，返回STS_BAD_REG(0x10)，不出现csr_rd_en_o/csr_wr_en_o脉冲；
+4.寄存器属性正确：VERSION(0x00)为RO，CTRL(0x04)为RW，STATUS(0x08)为RO，LAST_ERR(0x0C)为RO。
 
-clk_freq_checker
+error_priority_checker
 描述：
-1.检查频率值是否正确：连续采集时钟上升沿和下降沿并计算实际频率/周期，判断是否处于目标频率的允许误差范围内（±1%）；
-2.检查时钟稳定性：通过连续采样周期，对比相邻两个周期的频率偏差是否在3%内。
+检查错误优先级链和执行期错误检测正确性：
+1.前置检查错误按固定优先级链返回(高→低)：STS_FRAME_ERR(0x01) > STS_BAD_OPCODE(0x02) > STS_NOT_IN_TEST(0x04) > STS_DISABLED(0x08) > STS_BAD_REG(0x10) > STS_ALIGN_ERR(0x20)；
+2.任何前置错误均在发起CSR/AHB访问前收敛，不产生csr_wr_en_o/csr_rd_en_o/htrans_o脉冲；
+3.STS_AHB_ERR(0x40)不在前置优先级链中：仅在前置检查全部通过后、AHB事务实际执行期间发生，与前置错误互斥；
+4.AHB执行期错误：hresp_i=1时返回STS_AHB_ERR(0x40)；hready_i持续为0超过BUS_TIMEOUT_CYCLES(256)周期触发超时，返回STS_AHB_ERR(0x40)；
+5.Burst内任一beat上hresp_i=1立即中止burst，进入AXI_ERR状态。
+
+lane_mode_checker
+描述：
+检查lane_mode_i对应的通道宽度和数据信号使用正确性：
+1.lane_mode_i=2'b00(1-bit模式)：仅使用pdi_i[0]/pdo_o[0]，pdi_i[15:1]忽略，pdo_o[15:1]驱动为0；RD_CSR帧16bit需16个周期接收；
+2.lane_mode_i=2'b01(4-bit模式)：使用pdi_i[3:0]/pdo_o[3:0]，按高nibble优先发送；RD_CSR帧16bit需4个周期接收；
+3.lane_mode_i在接收器(SLC_CAXIS)和发送器(SLC_SAXIS)中被连续组合采样，用于计算每拍移位宽度bpc(bits per clock)；
+4.MVP版本不支持8-bit(2'b10)和16-bit(2'b11) lane模式。
 ```
 
 ### 步骤5: 更新FL-TP链接
