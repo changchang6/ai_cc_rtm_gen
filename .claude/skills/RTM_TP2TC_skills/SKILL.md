@@ -240,7 +240,7 @@ coverage check点：
 
 #### 3.3 testcase描述核心要求
 
-**总体目标**：最终testcase数量应为TP数量的**2-3倍以上**
+**总体目标**：最终testcase数量应为TP数量的**1.5倍以上**
 
 **每条Testcase描述总字数不少于400字符**
 
@@ -252,6 +252,12 @@ coverage check点：
    - 所有寄存器的所有位至少有1个测试用例覆盖到
    - 所有状态机的所有状态和状态跳转至少有1个测试用例覆盖到
 4. **随机测试用例数量**：每个TP应生成多个testcase（通常2-5个），包括正常场景、边界场景、错误场景、随机组合场景
+5. **TC逻辑充分性**：每条期望结果必须能从输入激励中逻辑推导出来。如果期望结果声称验证了某属性，则输入激励必须包含证明该属性所需的完整操作序列，反例：仅读取RO寄存器就说"验证了RO属性"——读回默认值可能只是因为从未写入，不能排除写入会改变值的可能性。具体规则：
+   - **属性验证型**（RO/RW/W1C/W0S等）：必须包含"写入-回读"完整序列。验证RO：先写再读，确认值不变；验证W1C：分别写1和写0，证明只有写1清除；验证RW：写后读回一致
+   - **优先级/排序验证型**：必须先单独测试每个条件，再测试组合，三者对比证明优先级。不能把所有条件混在一起就声称验证了优先级链
+   - **状态迁移验证型**：必须主动触发迁移（如active→idle），不能仅观测静态状态
+   - **持续/粘滞属性验证型**：必须测试属性在中间操作后是否保持。如验证sticky错误，需在错误后插入成功操作，再检查错误仍存在
+   - **定量声明验证型**：必须包含基线测量和对比。如验证功耗降低，需先测active基线再测idle
 
 **TC各部分详细要求**：
 
@@ -270,6 +276,7 @@ coverage check点：
   - 具体接口信号操作（如通过pdi_i[3:0]按MSB-first顺序发送）
 - **输入激励可执行性**：不使用模糊描述。不写"触发各类错误条件"这种无法直接执行的描述，而要写"发送非法opcode(0x00/0xFF)验证BAD_OPCODE(0x02)"这种可直接执行的描述
 - **输入激励的执行顺序**：明确每一步的操作，按顺序可以正常衔接。如果构造一种错误场景后无法立刻测试另一种错误，需要先复位和进行初始化配置。如果一个testcase中测试多个功能点不好衔接，可拆分为多个testcase
+- **输入激励逻辑充分性**：在编写每条输入激励时，自问"这些激励步骤能否逻辑推导出所有期望结果？"。如果某条期望结果是"X属性被验证"，则激励中必须包含证明X属性所需的前提操作。典型反模式：(1)声称验证RO属性但只读不写；(2)声称验证优先级但未单独测试各条件；(3)声称验证状态迁移但未触发迁移；(4)声称验证sticky属性但未插入中间操作；(5)声称验证定量改善但无基线对比
 - 格式：编号.具体操作；每条以分号结尾
 
 **3. 期望结果要求**：
@@ -315,16 +322,20 @@ test_csr_access
 2.配置lane_mode_i=2'b01（4-bit模式）；
 输入激励：
 1.发送WR_CSR命令：opcode=0x10，reg_addr=0x04(CTRL)，wdata=0x00000001（CTRL.EN=1）；
-2.发送RD_CSR命令：opcode=0x11，reg_addr=0x00(VERSION)，验证读返回；
-3.发送RD_CSR命令：opcode=0x11，reg_addr=0x04(CTRL)，验证读回wdata；
-4.发送RD_CSR命令：opcode=0x11，reg_addr=0x40（超出0x00~0x3F范围），验证地址越界拒绝；
+2.发送RD_CSR命令：opcode=0x11，reg_addr=0x04(CTRL)，验证RW寄存器写入后读回一致；
+3.发送WR_CSR命令：opcode=0x10，reg_addr=0x00(VERSION)，wdata=0xDEADBEEF（尝试写入RO寄存器）；
+4.发送RD_CSR命令：opcode=0x11，reg_addr=0x00(VERSION)，验证RO寄存器值未改变；
+5.发送WR_CSR命令：opcode=0x10，reg_addr=0x08(STATUS)，wdata=0xFFFFFFFF（尝试写入RO寄存器）；
+6.发送RD_CSR命令：opcode=0x11，reg_addr=0x08(STATUS)，验证RO寄存器值未改变；
+7.发送RD_CSR命令：opcode=0x11，reg_addr=0x40（超出0x00~0x3F范围），验证地址越界拒绝；
 期望结果：
-1.WR_CSR：csr_wr_en_o脉冲持续1周期，同一周期采样csr_addr_o=0x04/csr_wdata_o=0x01，响应status_code=STS_OK(0x00)；
-2.RD_CSR(VERSION)：csr_rd_en_o脉冲后下一周期采样csr_rdata_i有效，响应status_code=STS_OK(0x00)+rdata；
-3.RD_CSR(CTRL)：读回wdata=0x00000001；
+1.WR+RD_CSR(CTRL)：写入0x01后读回0x00000001，证明RW属性——写入值可读回；
+2.WR+RD_CSR(VERSION)：尝试写入0xDEADBEEF后读回仍为复位默认值，证明RO属性——写入无效；
+3.WR+RD_CSR(STATUS)：尝试写入0xFFFFFFFF后读回仍为复位默认值，证明RO属性——写入无效；
 4.地址越界：返回STS_BAD_REG(0x10)，不发起CSR访问（无csr_rd_en_o脉冲）；
+5.所有CSR写操作：csr_wr_en_o为单周期脉冲，同一周期内csr_addr_o和csr_wdata_o有效；
 coverage check点：
-对CSR地址范围0x00~0x3F收集功能覆盖率
+对CSR地址范围0x00~0x3F收集功能覆盖率，覆盖RW/RO属性验证场景
 
 test_mode_rejection
 描述：
