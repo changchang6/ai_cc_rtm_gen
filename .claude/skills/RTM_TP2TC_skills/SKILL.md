@@ -1,5 +1,5 @@
 ---
-name: RTM_TP2TC_gen
+name: RTM_TP2TC_skills
 description: 依据LRS文件和RTM文件中的DR-FL、FL-TP，生成RTM文件中的Checker List、DV Testcase List。当用户需要为芯片验证生成RTM文档、填写Checker列表或DV Testcase列表时使用此技能。
 allowed-tools: Read,Edit,Grep,Bash(python3:*)
 ---
@@ -240,7 +240,7 @@ coverage check点：
 
 #### 3.3 testcase描述核心要求
 
-**总体目标**：最终testcase数量应为TP数量的**1.5倍以上**
+**总体目标**：最终testcase数量应为TP数量的**1.1倍以上**
 
 **每条Testcase描述总字数不少于400字符**
 
