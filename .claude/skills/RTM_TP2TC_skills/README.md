@@ -3,7 +3,7 @@
 // skill依赖项：Python；Claude code官方文档处理skill（document-skills）
 
 // skill执行步骤：
-1.在Claude code工作目录下准备好LRS和RTM模板文件
+1.在Claude code工作目录下的input_config.json中指定LRS和RTM模板文件的位置
 2.进入claude code
 3.进入plan mode
 4.通过/RTM_TP2TC_skills命令启动skill

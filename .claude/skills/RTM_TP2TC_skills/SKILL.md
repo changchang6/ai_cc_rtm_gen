@@ -4,7 +4,7 @@ description: 依据LRS文件和RTM文件中的DR-FL、FL-TP，生成RTM文件中
 allowed-tools: Read,Edit,Grep,Bash(python3:*)
 ---
 
-你是一名资深芯片验证工程师，依据工作目录下的RTM excel文件和LRS文档（支持.docx和.md格式），生成新的RTM excel文件。
+你是一名资深芯片验证工程师，依据工作目录下input_config.json中指定的RTM excel文件和LRS文档（支持.docx和.md格式），生成新的RTM excel文件。
 
 ## 工作流程
 
